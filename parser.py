@@ -3,11 +3,13 @@ import re
 
 class parser():
     def __init__(self):
+        self.FILENAME = ''
         self.PARAMS = []
         self.DATA = []
 
-    def parse_data(self):
-        with open('0cadTEST3.DAT', 'r') as fin:
+    def parse_data(self, file_in):
+        self.FILENAME = file_in
+        with open(self.FILENAME, 'r') as fin:
             data = fin.read().splitlines(True)
             i = 0
             headEnd = 0
@@ -22,7 +24,7 @@ class parser():
                     headEnd = i;
                     PARAMS = data[i-1].split()
                     PARAMS.pop(0)
-                    PARAMS = self.get_headers(PARAMS)
+                    PARAMS = self.check_headers(PARAMS)
                     inHeader = False
 
             inFooter = False
@@ -42,9 +44,8 @@ class parser():
 
         df = pd.read_table('temp.dat', sep="\s+",names=PARAMS,usecols=PARAMS)
         self.DATA =df
-        return df
 
-    def get_headers(self, PARAMS):
+    def check_headers(self, PARAMS):
 
         parse_dict = {
             'PosCmd#00[0]': 'xcommand',
@@ -69,3 +70,7 @@ class parser():
     def get_all_com_fbk(self):
         comfbk = self.DATA[['xcommand','ycommand','xfeedback','yfeedback']]
         return comfbk
+
+    def get_all(self):
+        all = self.DATA
+        return all

@@ -5,6 +5,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from parser import parser
+import matplotlib.pyplot as plt
 
 class dataset():
     def __init__(self, data):

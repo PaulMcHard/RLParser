@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from parser import parser
+import matplotlib.pyplot as plt
 
 dirname = os.getcwd()
 data_parser = parser()
@@ -16,6 +17,7 @@ num_steps = len(xcom)
 actions = [1,0.5,0.1,0,-0.1,-0.5, -1]
 a_size = len(actions)
 errors = np.zeros(num_steps)
+mean_errors = []
 
 #Function below gives our reward system.
 def check_error(e_n, e_nplus):
@@ -89,8 +91,14 @@ with tf.Session() as sess:
                 print("Running reward: "+str(total_reward))
                 print("xcommand is: "+str(xcom[i])+" and xfeedback: "+str(xfbk[i]))
         n_mean_step = np.mean(np.absolute(errors))
-        print("The original mean error was: "+str(o_mean)+" RL  this step has changed this to: "+str(n_mean_step))
+        mean_errors.append(n_mean_step)
+        print("The original mean error was: {} Reinforcement Learning this step, {}, has changed this to: {} ".format(o_mean, k, n_mean_step))
         k += 1
 
     n_mean = np.mean(np.absolute(errors))
     print("The original mean error was: "+str(o_mean)+" RL has changed this to: "+str(n_mean))
+
+plt.plot(mean_errors)
+plt.ylabel('mean error per iteration')
+plt.xlabel('Number of iterations')
+plt.show()

@@ -3,7 +3,7 @@ import os
 import tensorflow as tf
 import numpy as np
 import pandas as pd
-from parser import parser
+from parse import parser
 import matplotlib.pyplot as plt
 
 dirname = os.getcwd()
@@ -55,7 +55,7 @@ optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
 update = optimizer.minimize(loss)
 
 #Now move on to training the agent, for which we need to actually invoke a tensorflow session
-total_episodes = 100   #Set total number of episodes to train the agent on. IRL this will be training on as much data as I can give it.
+total_episodes = 1000   #Set total number of episodes to train the agent on. IRL this will be training on as much data as I can give it.
 total_reward = np.zeros(a_size)   #Set scoreboard for bandits to zero.
 e = 0.6 #Set the chance of taking a random action
 

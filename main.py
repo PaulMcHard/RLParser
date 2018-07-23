@@ -3,9 +3,14 @@
 import os
 import tensorflow as tf
 import numpy as np
+import random
 import pandas as pd
-from parser import parser
+from parse import parser
 import matplotlib.pyplot as plt
+
+def chunk_list(list, n):
+    for i in range(0, len(list), n):
+        yield list[i : i + n]
 
 class dataset():
     def __init__(self, data):
@@ -22,6 +27,7 @@ class dataset():
         self.xcom = np.concatenate((self.xcom, filler))
         self.xfbk = np.concatenate((self.xfbk, filler))
         self.errors = np.concatenate((self.errors, filler))
+        self.num_steps = len(self.xcom)
 
 dirname = os.getcwd()
 dirname+='/data/'
@@ -31,20 +37,29 @@ for file in os.listdir(dirname):
     if file.endswith(".DAT"):
         files.append(file)
 
-datasets = []
-files = sorted(files)
+file_data = []
 for file in files:
     data_parser.parse_data(dirname+file)
     temp = data_parser.get_x().values
-    datasets.append(dataset(temp))
+    file_data.append(temp)
 
-max_steps = 0
-for set in datasets:
-    if set.num_steps > max_steps:
-        max_steps = set.num_steps
+set_length = 500
+datasets = []
+for file in file_data:
+    sets = list(chunk_list(file, set_length))
+    for set in sets:
+        temp = dataset(set)
+        if temp.num_steps < set_length:
+            temp.pad_size(set_length)
+        datasets.append(temp)
 
-for set in datasets:
-    set.pad_size(max_steps)
+random.shuffle(datasets)
+
+testchoice = np.random.randint(len(datasets), size = 4)
+test_data = []
+for test in testchoice:
+    test_data.append(datasets.pop(test)) #using pop simultaneously takes the test case out of the set of training data. Thus datasets is now exclusively our training data
+
 
 actions = [1, .9, .8, .7, .6, .5, .4, .3, .2, .1, 0, -.1, -.2, -.3, -.4, -.5, -.6, -.7, -.8, -.9, -1]
 a_size = len(actions)
@@ -82,7 +97,12 @@ class agent():
 #Now move on to training the agent, for which we need to actually invoke a tensorflow session
 total_episodes = 100   #Set total number of episodes to train the agent on. IRL this will be training on as much data as I can give it.
 total_reward = np.zeros(a_size)   #Set scoreboard for bandits to zero.
-e = 0.6 #Set the chance of taking a random action
+#epsilon = 0.6 #Set the chance of taking a random action
+epsilon = 1.0       #Exploration Rate
+max_epsilon = 1.0   #Exploration Probability at start
+min_epsilon = 0.01  #Minimum exploration Rate
+decay_rate = 0.01   #Exponential decayrate for exploration prob
+
 
 mean_errors = np.zeros((len(datasets), total_episodes))
 
@@ -90,7 +110,7 @@ mean_errors = np.zeros((len(datasets), total_episodes))
 tf.reset_default_graph()
 
 #Initialise the agent.
-the_agent = agent(lr = 0.001, s_size = max_steps, a_size = a_size)
+the_agent = agent(lr = 0.001, s_size = set_length, a_size = a_size)
 
 init = tf.global_variables_initializer()
 
@@ -99,9 +119,9 @@ with tf.Session() as sess:
     sess.run(init)
     for k in range(total_episodes):
         for s in range(len(datasets)):
-            for i in range(max_steps-1):
+            for i in range(set_length-1):
                 #Choose either a random action or onefrom our network.
-                if np.random.rand(1) < e:
+                if np.random.rand(1) < epsilon:
                     action = np.random.randint(a_size)
                 else:
                     action = sess.run(the_agent.chosen_action)
@@ -127,8 +147,11 @@ with tf.Session() as sess:
             mean_errors[s, k] = n_mean_step
             delta_err = datasets[s].init_mean - n_mean_step
             print("Initial mean error for dataset {} was: {} In this episode, ({}), Reinforcement Learning has changed this by {} to: {} ".format(s,datasets[s].init_mean, k, delta_err, n_mean_step))
-
-plt.plot(mean_errors)
+        epsilon = min_epsilon +(max_epsilon - min_epsilon)*np.exp(-decay_rate*k)
+end_mean = []
+for i in range(0,99):
+    end_mean.append(np.mean(mean_errors[:,i]))
+plt.plot(end_mean)
 plt.ylabel('mean error per iteration')
 plt.xlabel('Number of iterations')
 plt.show()

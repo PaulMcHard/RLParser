@@ -1,13 +1,19 @@
 import os
 import numpy as np
 import random
-import tensorflow as tf
 import pandas as pd
-from parser import parser
+from parse import parser
 import matplotlib.pyplot as plt
+import plaidml.keras
+plaidml.keras.install_backend()
+import keras
+
+def chunk_list(list, n):
+    for i in range(0, len(list), n):
+        yield list[i : i + n]
 
 class dataset():
-    def __init__(self, data, action_size):
+    def __init__(self, data):
         self.xcom = data[:,0]
         self.xfbk = data[:,1]
         self.init_mean = np.mean(np.absolute(self.xcom-self.xfbk))
@@ -21,6 +27,7 @@ class dataset():
         self.xcom = np.concatenate((self.xcom, filler))
         self.xfbk = np.concatenate((self.xfbk, filler))
         self.errors = np.concatenate((self.errors, filler))
+        self.num_steps = len(self.xcom)
 
 actions = [1, .9, .8, .7, .6, .5, .4, .3, .2, .1, 0, -.1, -.2, -.3, -.4, -.5, -.6, -.7, -.8, -.9, -1]
 action_size = len(actions)
@@ -32,23 +39,26 @@ for file in os.listdir(dirname):
     if file.endswith(".DAT"):
         files.append(file)
 
-datasets = []
-files = sorted(files)
+file_data = []
 for file in files:
     data_parser.parse_data(dirname+file)
     temp = data_parser.get_x().values
-    datasets.append(dataset(temp, action_size))
+    file_data.append(temp)
 
-max_steps = 0
-for set in datasets:
-    if max_steps <= set.num_steps:
-        max_steps = set.num_steps + 1
+set_length = 500
+datasets = []
+for file in file_data:
+    sets = list(chunk_list(file, set_length))
+    for set in sets:
+        temp = dataset(set)
+        if temp.num_steps < set_length:
+            temp.pad_size(set_length)
+        datasets.append(temp)
 
-state_size = max_steps
+random.shuffle(datasets)
+
+state_size = set_length
 qtable = np.zeros((state_size, action_size))
-
-for set in datasets:
-    set.pad_size(max_steps)
 
 #Function below gives our reward system.
 def check_error(e_n, e_nplus):
@@ -65,22 +75,28 @@ def check_error(e_n, e_nplus):
         return -1
 
 # SPECIFY HYPERPARAMETERS
-total_episodes = 100         #Total total_episodes
+total_epochs = 100         #Total total_epochs
 learning_rate = 0.001          #Learning Rate
 gamma = 0.95                 #Discounting Rate
 
 #Exploration parameters
-epsilon = 0.6       #Exploration Rate
-#max_epsilon = 1.0   #Exploration Probability at start
-#min_epsilon = 0.01  #Minimum exploration Rate
-#decay_rate = 0.01   #Exponential decayrate for exploration prob
+epsilon = 1.0       #Exploration Rate
+max_epsilon = 1.0   #Exploration Probability at start
+min_epsilon = 0.01  #Minimum exploration Rate
+decay_rate = 0.01   #Exponential decayrate for exploration prob
 
 #List of rewards
 rewards = []
 
-mean_errors = np.zeros((len(datasets), total_episodes))
+overall_init_mean = 0
+sum = 0
+for set in datasets:
+    sum += set.init_mean
+overall_init_mean = sum/len(datasets)
 
-for episode in range(total_episodes):
+mean_errors = np.zeros((len(datasets), total_epochs))
+
+for epoch in range(total_epochs):
     #Reset the environment
     step = 0
     done = False
@@ -88,7 +104,7 @@ for episode in range(total_episodes):
 
     for set in range(len(datasets)):
 
-        for step in range(max_steps-1):
+        for step in range(state_size-1):
             #Choose an action a in the current world state s, can be exploitation or exploration
             ## First we randomise a number
             exp_exp_tradeoff = random.uniform(0,1)
@@ -116,15 +132,25 @@ for episode in range(total_episodes):
 
         n_mean_step = np.mean(np.absolute(datasets[set].errors))
         datasets[set].mean_errors.append(n_mean_step)
-        mean_errors[set, episode] = n_mean_step
+        mean_errors[set, epoch] = n_mean_step
         delta_err = datasets[set].init_mean - n_mean_step
-        print("Initial mean error for dataset {} was: {} In this episode, ({}), Q-Learning has changed this by {} to: {} ".format(set,datasets[set].init_mean,episode, delta_err, n_mean_step))
+        #print("Initial mean error for dataset {} was: {} In this epoch, ({}), Q-Learning has changed this by {} to: {} ".format(set,datasets[set].init_mean,epoch, delta_err, n_mean_step))
 
-    episode += 1
+
+    overall_mean = np.mean(mean_errors[:, epoch])
+    prev_mean = np.mean(mean_errors[:, epoch-1])
+    init_delta = np.absolute(overall_init_mean - overall_mean)
+    epoch_delta = np.absolute(overall_mean - prev_mean)
+    print("Initial mean error was: {}, reduced in epoch {} to {}. A change of {} from previous, {} from init.".format(overall_init_mean,epoch, overall_mean, epoch_delta, init_delta))
     #Reduce epsilon (because we need less and less exploration)
-    #epsilon = min_epsilon +(max_epsilon - min_epsilon)*np.exp(-decay_rate*episode)
+    epsilon = min_epsilon +(max_epsilon - min_epsilon)*np.exp(-decay_rate*epoch)
+    epoch += 1
     rewards.append(total_rewards)
-plt.plot(mean_errors)
+
+end_mean = []
+for i in range(0,99):
+    end_mean.append(np.mean(mean_errors[:,i]))
+plt.plot(end_mean)
 plt.ylabel('mean error per iteration')
 plt.xlabel('Number of iterations')
 plt.show()

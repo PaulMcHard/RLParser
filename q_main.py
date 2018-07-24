@@ -4,8 +4,8 @@ import random
 import pandas as pd
 from parse import parser
 import matplotlib.pyplot as plt
-import plaidml.keras
-plaidml.keras.install_backend()
+#import plaidml.keras
+#plaidml.keras.install_backend()
 import keras
 
 def chunk_list(list, n):
@@ -75,8 +75,8 @@ def check_error(e_n, e_nplus):
         return -1
 
 # SPECIFY HYPERPARAMETERS
-total_epochs = 100         #Total total_epochs
-learning_rate = 0.001          #Learning Rate
+total_epochs = 200         #Total total_epochs
+learning_rate = 0.003          #Learning Rate
 gamma = 0.95                 #Discounting Rate
 
 #Exploration parameters

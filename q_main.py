@@ -75,7 +75,7 @@ def check_error(e_n, e_nplus):
         return -1
 
 # SPECIFY HYPERPARAMETERS
-total_epochs = 500         #Total total_epochs
+total_epochs = 1000        #Total total_epochs
 learning_rate = 0.003          #Learning Rate
 gamma = 0.95                 #Discounting Rate
 
@@ -147,8 +147,10 @@ for epoch in range(total_epochs):
     epoch += 1
     rewards.append(total_rewards)
 
+np.savetxt('x_qtable.txt', qtable)
+
 end_mean = []
-for i in range(0,len(epochs)-1):
+for i in range(0,total_epochs-1):
     end_mean.append(np.mean(mean_errors[:,i]))
 plt.plot(end_mean)
 plt.ylabel('mean error per epoch')

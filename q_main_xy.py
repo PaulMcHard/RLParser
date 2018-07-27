@@ -26,12 +26,12 @@ class dataset():
     def pad_size(self, max_steps):
         difference = max_steps - self.num_steps
         filler = np.zeros(difference)
+        self.num_steps = max_steps
         self.xcom = np.concatenate((self.xcom, filler))
         self.xfbk = np.concatenate((self.xfbk, filler))
         self.ycom = np.concatenate((self.ycom, filler))
         self.yfbk = np.concatenate((self.yfbk, filler))
-        np.lib.pad(self.errors, (0,len(filler)), 'constant', constant_values=(0))
-        self.num_steps = len(self.xcom)
+        self.errors = np.zeros((2,self.num_steps))
 
 actions = [1, .9, .8, .7, .6, .5, .4, .3, .2, .1, 0, -.1, -.2, -.3, -.4, -.5, -.6, -.7, -.8, -.9, -1]
 action_size = len(actions)
@@ -58,12 +58,12 @@ for file in file_data:
         if temp.num_steps < set_length:
             temp.pad_size(set_length)
         datasets.append(temp)
-
 random.shuffle(datasets)
 
 state_size = set_length
 qtable = np.zeros((2,state_size, action_size))
-
+#x_qtable = np.zeros((state_size, action_size))
+#y_qtable = np.zeros((state_size, action_size))
 
 #Function below gives our reward system.
 def check_error(e_n, e_nplus):
@@ -100,7 +100,8 @@ for set in datasets:
         sum += set.init_mean
 overall_init_mean = sum/len(datasets)
 
-mean_errors = np.zeros((len(datasets), total_epochs))
+x_mean_errors = np.zeros((len(datasets), total_epochs))
+y_mean_errors = np.zeros((len(datasets), total_epochs))
 
 for epoch in range(total_epochs):
     #Reset the environment
@@ -108,7 +109,7 @@ for epoch in range(total_epochs):
     done = False
     total_rewards = np.zeros(2)
 
-    for set in range(len(datasets)):
+    for set in range(len(datasets)-1):
 
         for step in range(state_size-1):
             #Choose an action a in the current world state s, can be exploitation or exploration
@@ -138,22 +139,27 @@ for epoch in range(total_epochs):
 
             # Update Q(s,a):= Q(s,a) + lr [R(s,a) + gamma * max Q(s',a') - Q(s,a)]
             # qtable[new_state,:] : all the actions we can take from new state
-            qtable[0, step, x_action] = qtable[0, step, x_action] + learning_rate*(x_reward + gamma * np.max(qtable[0,step+1, :]) - qtable[0,step,x_action])
-            qtable[1, step, y_action] = qtable[1, step, y_action] + learning_rate*(y_reward + gamma * np.max(qtable[0,step+1, :]) - qtable[0,step,y_action])
+            #qtable[0, step, x_action] = qtable[0, step, x_action] + learning_rate*(x_reward + gamma * np.max(qtable[0,step+1, :]) - qtable[0,step,x_action])
+            #qtable[1, step, y_action] = qtable[1, step, y_action] + learning_rate*(y_reward + gamma * np.max(qtable[0,step+1, :]) - qtable[0,step,y_action])
+
+            #x_qtable[step,x_action] = x_qtable[step, x_action] + learning_rate*(x_reward + gamma * np.max(x_qtable[step+1, :]) - x_qtable[step,x_action])
+            #y_qtable[step,y_action] = y_qtable[step, y_action] + learning_rate*(y_reward + gamma * np.max(y_qtable[step+1, :]) - y_qtable[step,y_action])
 
             total_rewards += (x_reward, y_reward)
 
-        n_mean_step = np.mean(np.absolute(datasets[set].errors))
-        datasets[set].mean_errors.append(n_mean_step)
-        mean_errors[set, epoch] = n_mean_step
-        delta_err = datasets[set].init_mean - n_mean_step
+        x_mean_step = np.mean(np.absolute(datasets[set].errors[0,:]))
+        y_mean_step = np.mean(np.absolute(datasets[set].errors[1,:]))
+        datasets[set].mean_errors.append([x_mean_step,y_mean_step])
+        x_mean_errors[set, epoch] = x_mean_step
+        y_mean_errors[set, epoch] = y_mean_step
+        delta_err = np.subtract(datasets[set].init_mean, (x_mean_step, y_mean_step))
         #print("Initial mean error for dataset {} was: {} In this epoch, ({}), Q-Learning has changed this by {} to: {} ".format(set,datasets[set].init_mean,epoch, delta_err, n_mean_step))
 
 
-    overall_mean = np.mean(mean_errors[:, epoch])
-    prev_mean = np.mean(mean_errors[:, epoch-1])
-    init_delta = np.absolute(overall_init_mean - overall_mean)
-    epoch_delta = np.absolute(overall_mean - prev_mean)
+    overall_mean = (np.mean(x_mean_errors[:, epoch]),np.mean(y_mean_errors[:, epoch]))
+    prev_mean = (np.mean(x_mean_errors[:, epoch-1]),np.mean(y_mean_errors[:, epoch-1]))
+    init_delta = np.absolute(np.subtract(overall_init_mean,overall_mean))
+    epoch_delta = np.absolute(np.subtract(overall_mean,prev_mean))
     print("Initial mean error was: {}, reduced in epoch {} to {}. A change of {} from previous, {} from init.".format(overall_init_mean,epoch, overall_mean, epoch_delta, init_delta))
     #Reduce epsilon (because we need less and less exploration)
     epsilon = min_epsilon +(max_epsilon - min_epsilon)*np.exp(-decay_rate*epoch)

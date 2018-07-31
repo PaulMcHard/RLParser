@@ -91,17 +91,23 @@ class agent():
         self.action_holder = tf.placeholder(shape=[1],dtype=tf.int32)
         self.responsible_weight = tf.slice(self.weights,self.action_holder,[1])
         self.loss = -(tf.log(self.responsible_weight)*self.reward_holder)
-        self.optimizer = tf.train.GradientDescentOptimizer(learning_rate=lr)
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=lr)
         self.update = self.optimizer.minimize(self.loss)
 
 #Now move on to training the agent, for which we need to actually invoke a tensorflow session
 total_episodes = 100   #Set total number of episodes to train the agent on. IRL this will be training on as much data as I can give it.
-total_reward = np.zeros(a_size)   #Set scoreboard for bandits to zero.
+total_reward = np.zeros(a_size)
 #epsilon = 0.6 #Set the chance of taking a random action
 epsilon = 1.0       #Exploration Rate
 max_epsilon = 1.0   #Exploration Probability at start
 min_epsilon = 0.01  #Minimum exploration Rate
 decay_rate = 0.01   #Exponential decayrate for exploration prob
+
+overall_init_mean = 0
+sum = 0
+for set in datasets:
+    sum += set.init_mean
+overall_init_mean = sum/len(datasets)
 
 
 mean_errors = np.zeros((len(datasets), total_episodes))
@@ -117,7 +123,7 @@ init = tf.global_variables_initializer()
 #Launch the tensorflow graph
 with tf.Session() as sess:
     sess.run(init)
-    for k in range(total_episodes):
+    for epoch in range(total_episodes):
         for s in range(len(datasets)):
             for i in range(set_length-1):
                 #Choose either a random action or onefrom our network.
@@ -144,10 +150,18 @@ with tf.Session() as sess:
 
             n_mean_step = np.mean(np.absolute(datasets[s].errors))
             datasets[s].mean_errors.append(n_mean_step)
-            mean_errors[s, k] = n_mean_step
+            mean_errors[s, epoch] = n_mean_step
             delta_err = datasets[s].init_mean - n_mean_step
-            print("Initial mean error for dataset {} was: {} In this episode, ({}), Reinforcement Learning has changed this by {} to: {} ".format(s,datasets[s].init_mean, k, delta_err, n_mean_step))
-        epsilon = min_epsilon +(max_epsilon - min_epsilon)*np.exp(-decay_rate*k)
+            print("Initial mean error for dataset {} was: {} In this episode, ({}), Reinforcement Learning has changed this by {} to: {} ".format(s,datasets[s].init_mean, epoch, delta_err, n_mean_step))
+
+        overall_mean = np.mean(mean_errors[:, epoch])
+        prev_mean = np.mean(mean_errors[:, epoch-1])
+        init_delta = np.absolute(overall_init_mean - overall_mean)
+        epoch_delta = np.absolute(overall_mean - prev_mean)
+        print("Initial mean error was: {}, reduced in epoch {} to {}. A change of {} from previous, {} from init.".format(overall_init_mean,epoch, overall_mean, epoch_delta, init_delta))
+        #Reduce epsilon (because we need less and less exploration)    n_mean_step = np.mean(np.absolute(datasets[s].errors))
+        epsilon = min_epsilon +(max_epsilon - min_epsilon)*np.exp(-decay_rate*epoch)
+
 end_mean = []
 for i in range(0,99):
     end_mean.append(np.mean(mean_errors[:,i]))

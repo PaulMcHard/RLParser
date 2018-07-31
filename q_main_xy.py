@@ -4,8 +4,6 @@ import random
 import pandas as pd
 from parse import parser
 import matplotlib.pyplot as plt
-#import plaidml.keras
-#plaidml.keras.install_backend()
 #import keras
 
 def chunk_list(list, n):

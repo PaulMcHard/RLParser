@@ -139,7 +139,7 @@ with tf.Session() as sess:
                 reward = check_error(datasets[s].errors[i-1], datasets[s].errors[i])
 
                 #Update the network.
-                _,resp,ww = sess.run([the_agent.update,the_agent.responsible_weight,the_agent.weights], feed_dict={the_agent.reward_holder:[reward],the_agent.action_holder:[action]})
+                sess.run([the_agent.update,the_agent.responsible_weight,the_agent.weights], feed_dict={the_agent.reward_holder:[reward],the_agent.action_holder:[action]})
                 #print(str(action)+" : "+str(reward))
 
                 #Update running tally of scores
@@ -151,9 +151,7 @@ with tf.Session() as sess:
             n_mean_step = np.mean(np.absolute(datasets[s].errors))
             datasets[s].mean_errors.append(n_mean_step)
             mean_errors[s, epoch] = n_mean_step
-            delta_err = datasets[s].init_mean - n_mean_step
-            print("Initial mean error for dataset {} was: {} In this episode, ({}), Reinforcement Learning has changed this by {} to: {} ".format(s,datasets[s].init_mean, epoch, delta_err, n_mean_step))
-
+            
         overall_mean = np.mean(mean_errors[:, epoch])
         prev_mean = np.mean(mean_errors[:, epoch-1])
         init_delta = np.absolute(overall_init_mean - overall_mean)

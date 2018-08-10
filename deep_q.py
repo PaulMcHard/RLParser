@@ -38,7 +38,7 @@ class dataset():
         self.ycom = data[:, 1]
         self.xfbk = data[:, 2]
         self.yfbk = data[:, 3]
-        self.init_mean = (np.mean(np.absolute(self.xcom-self.xfbk)))
+        self.init_mean = np.mean(np.absolute(self.xcom-self.xfbk))
         self.num_steps = len(self.xcom) # num_steps is constant for x and y
         self.errors = np.zeros(self.num_steps)
         self.mean_errors = []
@@ -107,7 +107,7 @@ class DQNAgent:
 
 if __name__ == "__main__":
 
-    actions = np.linspace(-10, 10, 201)
+    actions = np.linspace(2, -2, 41)
     action_size = len(actions)
     dirname = os.getcwd()
     dirname += '/data/'
@@ -128,7 +128,7 @@ if __name__ == "__main__":
         else:
             file_data_train.append(temp)
 
-    set_length = 500
+    set_length = 200
     train_sets = []
     test_sets = []
     for file in file_data_train:
@@ -137,7 +137,8 @@ if __name__ == "__main__":
             temp = dataset(set)
             if temp.num_steps < set_length:
                 temp.pad_size(set_length)
-            train_sets.append(temp)
+            if temp.init_mean <= 15:
+                train_sets.append(temp)
 
     random.shuffle(train_sets)
 
@@ -147,15 +148,15 @@ if __name__ == "__main__":
             temp = dataset(set)
             if temp.num_steps < set_length:
                 temp.pad_size(set_length)
-            test_sets.append(temp)
+            if temp.init_mean <= 15:
+                test_sets.append(temp)
 
     state_size = set_length
     mean_errors = np.zeros((len(train_sets), EPISODES))
 
-    overall_init_mean = np.zeros(2)
-    sum = np.zeros(2)
+    overall_init_mean = 0
+    sum = 0
     for set in train_sets:
-        for i in range(0, 1):
             sum += set.init_mean
     overall_init_mean = sum/len(train_sets)
 

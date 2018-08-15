@@ -6,6 +6,8 @@ import numpy as np
 import random
 import pandas as pd
 from parse import parser
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
 def chunk_list(list, n):
@@ -116,49 +118,49 @@ mean_errors = np.zeros((len(datasets), total_episodes))
 tf.reset_default_graph()
 
 #Initialise the agent.
-the_agent = agent(lr = 0.001, s_size = set_length, a_size = a_size)
+the_agent = agent(lr=0.001, s_size=set_length, a_size=a_size)
 
 init = tf.global_variables_initializer()
 
 #Launch the tensorflow graph
-with tf.Session() as sess:
-    sess.run(init)
-    for epoch in range(total_episodes):
-        for s in range(len(datasets)):
-            for i in range(set_length-1):
-                #Choose either a random action or onefrom our network.
-                if np.random.rand(1) < epsilon:
-                    action = np.random.randint(a_size)
-                else:
-                    action = sess.run(the_agent.chosen_action)
+with tf.device('/device:GPU:0'):
+    with tf.Session() as sess:
+        sess.run(init)
+        for epoch in range(total_episodes):
+            for s in range(len(datasets)):
+                for i in range(set_length-1):
+                    #Choose either a random action or onefrom our network.
+                    if np.random.rand(1) < epsilon:
+                        action = np.random.randint(a_size)
+                    else:
+                        action = sess.run(the_agent.chosen_action)
 
+                    datasets[s].xfbk[i-1] += actions[action]*np.sign(datasets[s].xcom[i-1]-datasets[s].xfbk[i-1]) #add 1, 0 or -1 to demonstrate accel, const or decel
+                    datasets[s].errors[i-1] = np.absolute(datasets[s].xcom[i-1]-datasets[s].xfbk[i-1])
+                    datasets[s].errors[i] = np.absolute(datasets[s].xcom[i]-datasets[s].xfbk[i])
+                    reward = check_error(datasets[s].errors[i-1], datasets[s].errors[i])
 
-                datasets[s].xfbk[i-1] += actions[action]*np.sign(datasets[s].xcom[i-1]-datasets[s].xfbk[i-1]) #add 1, 0 or -1 to demonstrate accel, const or decel
-                datasets[s].errors[i-1] = np.absolute(datasets[s].xcom[i-1]-datasets[s].xfbk[i-1])
-                datasets[s].errors[i] = np.absolute(datasets[s].xcom[i]-datasets[s].xfbk[i])
-                reward = check_error(datasets[s].errors[i-1], datasets[s].errors[i])
+                    #Update the network.
+                    sess.run([the_agent.update,the_agent.responsible_weight,the_agent.weights], feed_dict={the_agent.reward_holder:[reward],the_agent.action_holder:[action]})
+                    #print(str(action)+" : "+str(reward))
 
-                #Update the network.
-                sess.run([the_agent.update,the_agent.responsible_weight,the_agent.weights], feed_dict={the_agent.reward_holder:[reward],the_agent.action_holder:[action]})
-                #print(str(action)+" : "+str(reward))
+                    #Update running tally of scores
+                    total_reward[action] += reward
+                    '''if i % 1000 == 0:
+                        print("Running reward: "+str(total_reward))
+                        print("xcommand is: "+str(xcom[i])+" and xfeedback: "+str(xfbk[i]))'''
 
-                #Update running tally of scores
-                total_reward[action] += reward
-                '''if i % 1000 == 0:
-                    print("Running reward: "+str(total_reward))
-                    print("xcommand is: "+str(xcom[i])+" and xfeedback: "+str(xfbk[i]))'''
+                n_mean_step = np.mean(np.absolute(datasets[s].errors))
+                datasets[s].mean_errors.append(n_mean_step)
+                mean_errors[s, epoch] = n_mean_step
 
-            n_mean_step = np.mean(np.absolute(datasets[s].errors))
-            datasets[s].mean_errors.append(n_mean_step)
-            mean_errors[s, epoch] = n_mean_step
-            
-        overall_mean = np.mean(mean_errors[:, epoch])
-        prev_mean = np.mean(mean_errors[:, epoch-1])
-        init_delta = np.absolute(overall_init_mean - overall_mean)
-        epoch_delta = np.absolute(overall_mean - prev_mean)
-        print("Initial mean error was: {}, reduced in epoch {} to {}. A change of {} from previous, {} from init.".format(overall_init_mean,epoch, overall_mean, epoch_delta, init_delta))
-        #Reduce epsilon (because we need less and less exploration)    n_mean_step = np.mean(np.absolute(datasets[s].errors))
-        epsilon = min_epsilon +(max_epsilon - min_epsilon)*np.exp(-decay_rate*epoch)
+            overall_mean = np.mean(mean_errors[:, epoch])
+            prev_mean = np.mean(mean_errors[:, epoch-1])
+            init_delta = np.absolute(overall_init_mean - overall_mean)
+            epoch_delta = np.absolute(overall_mean - prev_mean)
+            print("Initial mean error was: {}, reduced in epoch {} to {}. A change of {} from previous, {} from init.".format(overall_init_mean,epoch, overall_mean, epoch_delta, init_delta))
+            #Reduce epsilon (because we need less and less exploration)    n_mean_step = np.mean(np.absolute(datasets[s].errors))
+            epsilon = min_epsilon +(max_epsilon - min_epsilon)*np.exp(-decay_rate*epoch)
 
 end_mean = []
 for i in range(0,99):

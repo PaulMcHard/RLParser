@@ -13,6 +13,7 @@ from keras.optimizers import Adam
 
 EPISODES = 200
 
+
 def chunk_list(list, n):
     for i in range(0, len(list), n):
         yield list[i: i + n]
@@ -204,7 +205,7 @@ if __name__ == "__main__":
             prev_mean = np.mean(mean_errors[:, e-1])
             init_delta = np.absolute(overall_init_mean - overall_mean)
             epoch_delta = np.absolute(prev_mean - overall_mean)
-            print("Initial mean error was: {}, reduced in epoch {} to {}. A change of {} from previous, {} from init.".format(overall_init_mean, e+1, overall_mean, epoch_delta, init_delta))
+            print("Initial mean error was: {}, reduced in epoch {} to {}. A change of {} from previous, {} from init.".format(overall_init_mean, e, overall_mean, epoch_delta, init_delta))
 
             # if e % 10 == 0:
     #     agent.save("./save/cartpole-dqn.h5")
@@ -218,36 +219,5 @@ if __name__ == "__main__":
     plt.ylabel('mean error per epoch')
     plt.xlabel('Number of epochs')
     plt.grid(True)
-    plt.savefig("PLOT_DEEPQ_TRAINON{}".format(chosen_test_set))
-    plt.show()
-
-    test_init_mean = 0
-    t_sum = 0
-    for set in test_sets:
-        t_sum += set.init_mean
-    test_init_mean = t_sum/len(test_sets)
-
-    test_mean_errors = np.zeros(len(test_sets))
-
-    # TEST MODEL
-    for set in range(len(test_sets)-1):
-
-        for step in range(state_size-1):
-            action = agent.act(state)
-
-            test_sets[set].xfbk[step] += actions[action] * np.sign(test_sets[set].xcom[step] - test_sets[set].xfbk[step])  # add 1, 0 or -1 to demonstrate accel, const or decel
-            test_sets[set].errors[step] = np.absolute(test_sets[set].xcom[step] - test_sets[set].xfbk[step])
-            test_sets[set].errors[step+1] = np.absolute(test_sets[set].xcom[step + 1] - test_sets[set].xfbk[step + 1])
-
-        t_mean_step = np.mean(np.absolute(test_sets[set].errors[:]))
-        test_mean_errors[set] = t_mean_step
-
-    test_end_mean = (np.mean(test_mean_errors[:]))
-
-    print("Test mean changed from {} to {}".format(test_init_mean, test_end_mean))
-
-    # SHOW PLOT AFTER TESTING
-    plt.axhline(test_init_mean, color = 'r')
-    plt.axhline(test_end_mean, color = 'b')
     plt.savefig("PLOT_DEEPQ_TESTON{}".format(chosen_test_set))
     plt.show()

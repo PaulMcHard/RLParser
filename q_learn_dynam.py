@@ -2,82 +2,16 @@ import os
 import numpy as np
 import random
 from parse import parser
+import data_prep
+from data_prep import dataset
 import matplotlib.pyplot as plt
-# import keras
-
-
-def chunk_list(list, n):
-    for i in range(0, len(list), n):
-        yield list[i: i + n]
-
-
-class dataset():
-    def __init__(self, data):
-        self.xcom = data[:, 0]
-        self.ycom = data[:, 1]
-        self.xfbk = data[:, 2]
-        self.yfbk = data[:, 3]
-        self.init_mean = (np.mean(np.absolute(self.xcom-self.xfbk)), np.mean(np.absolute(self.ycom-self.yfbk)))
-        self.num_steps = len(self.xcom)  # num_steps is constant for x and y
-        self.errors = np.zeros((2, self.num_steps))
-        self.mean_errors = []
-
-    def pad_size(self, max_steps):
-        difference = max_steps - self.num_steps
-        filler = np.zeros(difference)
-        self.num_steps = max_steps
-        self.xcom = np.concatenate((self.xcom, filler))
-        self.xfbk = np.concatenate((self.xfbk, filler))
-        self.ycom = np.concatenate((self.ycom, filler))
-        self.yfbk = np.concatenate((self.yfbk, filler))
-        self.errors = np.zeros((2, self.num_steps))
-
 
 actions = np.linspace(1, -1, 3)
 action_size = len(actions)
-dirname = os.getcwd()
-dirname += '/data/'
-data_parser = parser()
-files = []
-for file in os.listdir(dirname):
-    if file.endswith(".DAT"):
-        files.append(file)
+state_size = 200
+chosen_test_set = 20
+train_sets, test_sets = data_prep.prepare(chosen_test_set, state_size)
 
-chosen_test_set = 17
-file_data_train = []
-file_data_test = []
-for i in range(len(files)):
-    data_parser.parse_data(dirname+files[i])
-    temp = data_parser.get_all_com_fbk().values
-    if i == chosen_test_set:
-        file_data_test.append(temp)
-    else:
-        file_data_train.append(temp)
-
-set_length = 200
-train_sets = []
-test_sets = []
-for file in file_data_train:
-    sets = list(chunk_list(file, set_length))
-    for set in sets:
-        temp = dataset(set)
-        if temp.num_steps < set_length:
-            temp.pad_size(set_length)
-        if temp.init_mean[0] <= 15 and temp.init_mean[1] <= 65:
-            train_sets.append(temp)
-
-random.shuffle(train_sets)
-
-for file in file_data_test:
-    sets = list(chunk_list(file, set_length))
-    for set in sets:
-        temp = dataset(set)
-        if temp.num_steps < set_length:
-            temp.pad_size(set_length)
-        if temp.init_mean[0] <= 15 and temp.init_mean[1] <= 65:
-            test_sets.append(temp)
-
-state_size = set_length
 # qtable = np.zeros((state_size, action_size))
 x_qtable = np.zeros((state_size, action_size))
 y_qtable = np.zeros((state_size, action_size))
@@ -88,15 +22,11 @@ def check_error(e_n, e_nplus):
     # Check error subtracted from previous error
     result = e_n - e_nplus
     if result < 0:
-        # return a positive reward.
-        return 100
+        return 100   # return a positive reward.
     elif result == 0:
-        # return a neutral reward.
-        return 0
+        return 0     # return a neutral reward.
     else:
-        # eturn a negative reward.
-        return -1
-
+        return -1    # eturn a negative reward.
 
 # SPECIFY HYPERPARAMETERS
 total_epochs = 500           # Total total_epochs
@@ -109,9 +39,7 @@ max_epsilon = 1.0   # Exploration Probability at start
 min_epsilon = 0.01  # Minimum exploration Rate
 decay_rate = 0.01   # Exponential decayrate for exploration prob
 
-# List of rewards
 rewards = []
-
 overall_init_mean = np.zeros(2)
 sum = np.zeros(2)
 for set in train_sets:
@@ -151,8 +79,8 @@ for epoch in range(total_epochs):
             train_sets[set].errors[1, step] = np.absolute(train_sets[set].ycom[step]-train_sets[set].yfbk[step])
             train_sets[set].errors[0, step+1] = np.absolute(train_sets[set].xcom[step+1]-train_sets[set].xfbk[step+1])
             train_sets[set].errors[1, step+1] = np.absolute(train_sets[set].ycom[step+1]-train_sets[set].yfbk[step+1])
-            x_reward = check_error(train_sets[set].errors[0,step], train_sets[set].errors[0,step+1])
-            y_reward = check_error(train_sets[set].errors[1,step], train_sets[set].errors[1,step+1])
+            x_reward = check_error(train_sets[set].errors[0, step], train_sets[set].errors[0, step+1])
+            y_reward = check_error(train_sets[set].errors[1, step], train_sets[set].errors[1, step+1])
 
             # Update Q(s,a):= Q(s,a) + lr [R(s,a) + gamma * max Q(s',a') - Q(s,a)]
             x_qtable[step, x_action] = x_qtable[step, x_action] + learning_rate * (x_reward + gamma * np.max(x_qtable[step+1, :]) - x_qtable[step, x_action])

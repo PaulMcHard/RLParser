@@ -39,30 +39,41 @@ for file in os.listdir(dirname):
     if file.endswith(".DAT"):
         files.append(file)
 
-file_data = []
-for file in files:
-    data_parser.parse_data(dirname+file)
+chosen_test_set = 4
+file_data_train = []
+file_data_test = []
+for i in range(len(files)):
+    data_parser.parse_data(dirname+files[i])
     temp = data_parser.get_x().values
-    file_data.append(temp)
+    if i == chosen_test_set:
+        file_data_test.append(temp)
+    else:
+        file_data_train.append(temp)
 
-set_length = 500
-datasets = []
-for file in file_data:
+set_length = 200
+train_sets = []
+test_sets = []
+for file in file_data_train:
     sets = list(chunk_list(file, set_length))
     for set in sets:
         temp = dataset(set)
         if temp.num_steps < set_length:
             temp.pad_size(set_length)
-        datasets.append(temp)
+        if temp.init_mean <= 15:
+            train_sets.append(temp)
 
-random.shuffle(datasets)
+random.shuffle(train_sets)
 
-testchoice = np.random.randint(len(datasets), size = 4)
-test_data = []
-for test in testchoice:
-    test_data.append(datasets.pop(test)) #using pop simultaneously takes the test case out of the set of training data. Thus datasets is now exclusively our training data
+for file in file_data_test:
+    sets = list(chunk_list(file, set_length))
+    for set in sets:
+        temp = dataset(set)
+        if temp.num_steps < set_length:
+            temp.pad_size(set_length)
+        if temp.init_mean <= 15:
+            test_sets.append(temp)
 
-
+state_size = set_length
 actions = [1, .9, .8, .7, .6, .5, .4, .3, .2, .1, 0, -.1, -.2, -.3, -.4, -.5, -.6, -.7, -.8, -.9, -1]
 a_size = len(actions)
 
@@ -97,7 +108,7 @@ class agent():
         self.update = self.optimizer.minimize(self.loss)
 
 #Now move on to training the agent, for which we need to actually invoke a tensorflow session
-total_episodes = 100   #Set total number of episodes to train the agent on. IRL this will be training on as much data as I can give it.
+total_episodes = 1000   #Set total number of episodes to train the agent on. IRL this will be training on as much data as I can give it.
 total_reward = np.zeros(a_size)
 #epsilon = 0.6 #Set the chance of taking a random action
 epsilon = 1.0       #Exploration Rate
@@ -107,12 +118,12 @@ decay_rate = 0.01   #Exponential decayrate for exploration prob
 
 overall_init_mean = 0
 sum = 0
-for set in datasets:
+for set in train_sets:
     sum += set.init_mean
-overall_init_mean = sum/len(datasets)
+overall_init_mean = sum/len(train_sets)
 
 
-mean_errors = np.zeros((len(datasets), total_episodes))
+mean_errors = np.zeros((len(train_sets), total_episodes))
 
 #Now move on to establising the agent
 tf.reset_default_graph()
@@ -127,18 +138,18 @@ with tf.device('/device:GPU:0'):
     with tf.Session() as sess:
         sess.run(init)
         for epoch in range(total_episodes):
-            for s in range(len(datasets)):
-                for i in range(set_length-1):
+            for s in range(len(train_sets)):
+                for i in range(state_size-1):
                     #Choose either a random action or onefrom our network.
                     if np.random.rand(1) < epsilon:
                         action = np.random.randint(a_size)
                     else:
                         action = sess.run(the_agent.chosen_action)
 
-                    datasets[s].xfbk[i-1] += actions[action]*np.sign(datasets[s].xcom[i-1]-datasets[s].xfbk[i-1]) #add 1, 0 or -1 to demonstrate accel, const or decel
-                    datasets[s].errors[i-1] = np.absolute(datasets[s].xcom[i-1]-datasets[s].xfbk[i-1])
-                    datasets[s].errors[i] = np.absolute(datasets[s].xcom[i]-datasets[s].xfbk[i])
-                    reward = check_error(datasets[s].errors[i-1], datasets[s].errors[i])
+                    train_sets[s].xfbk[i-1] += actions[action]*np.sign(train_sets[s].xcom[i-1]-train_sets[s].xfbk[i-1]) #add 1, 0 or -1 to demonstrate accel, const or decel
+                    train_sets[s].errors[i-1] = np.absolute(train_sets[s].xcom[i-1]-train_sets[s].xfbk[i-1])
+                    train_sets[s].errors[i] = np.absolute(train_sets[s].xcom[i]-train_sets[s].xfbk[i])
+                    reward = check_error(train_sets[s].errors[i-1], train_sets[s].errors[i])
 
                     #Update the network.
                     sess.run([the_agent.update,the_agent.responsible_weight,the_agent.weights], feed_dict={the_agent.reward_holder:[reward],the_agent.action_holder:[action]})
@@ -150,8 +161,8 @@ with tf.device('/device:GPU:0'):
                         print("Running reward: "+str(total_reward))
                         print("xcommand is: "+str(xcom[i])+" and xfeedback: "+str(xfbk[i]))'''
 
-                n_mean_step = np.mean(np.absolute(datasets[s].errors))
-                datasets[s].mean_errors.append(n_mean_step)
+                n_mean_step = np.mean(np.absolute(train_sets[s].errors))
+                train_sets[s].mean_errors.append(n_mean_step)
                 mean_errors[s, epoch] = n_mean_step
 
             overall_mean = np.mean(mean_errors[:, epoch])
@@ -159,13 +170,46 @@ with tf.device('/device:GPU:0'):
             init_delta = np.absolute(overall_init_mean - overall_mean)
             epoch_delta = np.absolute(overall_mean - prev_mean)
             print("Initial mean error was: {}, reduced in epoch {} to {}. A change of {} from previous, {} from init.".format(overall_init_mean,epoch, overall_mean, epoch_delta, init_delta))
-            #Reduce epsilon (because we need less and less exploration)    n_mean_step = np.mean(np.absolute(datasets[s].errors))
+            #Reduce epsilon (because we need less and less exploration)    n_mean_step = np.mean(np.absolute(train_sets[s].errors))
             epsilon = min_epsilon +(max_epsilon - min_epsilon)*np.exp(-decay_rate*epoch)
 
-end_mean = []
-for i in range(0,99):
-    end_mean.append(np.mean(mean_errors[:,i]))
-plt.plot(end_mean)
-plt.ylabel('mean error per iteration')
-plt.xlabel('Number of iterations')
-plt.show()
+        end_mean = []
+        for i in range(0,total_episodes-1):
+            end_mean.append(np.mean(mean_errors[:,i]))
+
+        plt.plot(end_mean, 'k.-')
+        plt.title('Training Results in X')
+        plt.ylabel('mean error per epoch')
+        plt.xlabel('Number of epochs')
+        plt.grid(True)
+        plt.savefig("PLOT_CONTEXT_TRAINON{}".format(chosen_test_set))
+        plt.show()
+
+        test_init_mean = 0
+        t_sum = 0
+        for set in test_sets:
+            t_sum += set.init_mean
+        test_init_mean = t_sum/len(test_sets)
+
+        test_mean_errors = np.zeros(len(test_sets))
+
+            # TEST MODEL
+        for s in range(len(test_sets)):
+            for i in range(state_size-1):
+                action = sess.run(the_agent.chosen_action)
+                test_sets[s].xfbk[i-1] += actions[action]*np.sign(test_sets[s].xcom[i-1]-test_sets[s].xfbk[i-1]) #add 1, 0 or -1 to demonstrate accel, const or decel
+                test_sets[s].errors[i-1] = np.absolute(test_sets[s].xcom[i-1]-test_sets[s].xfbk[i-1])
+                test_sets[s].errors[i] = np.absolute(test_sets[s].xcom[i]-test_sets[s].xfbk[i])
+
+            t_mean_step = np.mean(np.absolute(test_sets[s].errors[:]))
+            test_mean_errors[s] = t_mean_step
+
+        test_end_mean = (np.mean(test_mean_errors))
+
+        print("Test mean changed from {} to {}".format(test_init_mean, test_end_mean))
+
+        # SHOW PLOT AFTER TESTING
+        plt.axhline(test_init_mean, color = 'r')
+        plt.axhline(test_end_mean, color = 'b')
+        plt.savefig("PLOT_CONTEXT_TESTON{}".format(chosen_test_set))
+        plt.show()

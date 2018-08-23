@@ -11,7 +11,7 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 
-EPISODES = 200
+EPISODES = 400
 
 def chunk_list(list, n):
     for i in range(0, len(list), n):
@@ -118,7 +118,7 @@ if __name__ == "__main__":
         if file.endswith(".DAT"):
             files.append(file)
 
-    chosen_test_set = 0
+    chosen_test_set = 6
     file_data_train = []
     file_data_test = []
     for i in range(len(files)):
@@ -175,6 +175,7 @@ if __name__ == "__main__":
 
                 for step in range(state_size-1):
                     # env.render()
+                    agent.epsilon = agent.epsilon_min
                     action = agent.act(state)
                     # next_state, reward, done, _ = env.step(action)
                     train_sets[set].xfbk[step] += actions[action] * np.sign(train_sets[set].xcom[step] - train_sets[set].xfbk[step])  # add 1, 0 or -1 to demonstrate accel, const or decel

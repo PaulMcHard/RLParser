@@ -39,7 +39,7 @@ for file in os.listdir(dirname):
     if file.endswith(".DAT"):
         files.append(file)
 
-chosen_test_set = 4
+chosen_test_set = 8
 file_data_train = []
 file_data_test = []
 for i in range(len(files)):
@@ -108,7 +108,7 @@ class agent():
         self.update = self.optimizer.minimize(self.loss)
 
 #Now move on to training the agent, for which we need to actually invoke a tensorflow session
-total_episodes = 1000   #Set total number of episodes to train the agent on. IRL this will be training on as much data as I can give it.
+total_episodes = 400   #Set total number of episodes to train the agent on. IRL this will be training on as much data as I can give it.
 total_reward = np.zeros(a_size)
 #epsilon = 0.6 #Set the chance of taking a random action
 epsilon = 1.0       #Exploration Rate

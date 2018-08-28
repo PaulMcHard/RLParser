@@ -118,7 +118,7 @@ if __name__ == "__main__":
         if file.endswith(".DAT"):
             files.append(file)
 
-    chosen_test_set = 6
+    chosen_test_set = 12
     file_data_train = []
     file_data_test = []
     for i in range(len(files)):
